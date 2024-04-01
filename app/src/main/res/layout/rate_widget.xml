@@ -1,0 +1,69 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:theme="@style/Theme.Ecgrate.AppWidgetContainer">
+
+    <TextView
+        android:drawablePadding="8dp"
+        android:id="@+id/appwidget_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp"
+        android:contentDescription="@string/click_to_load_data"
+        android:text="@string/click_to_load_data"
+        android:textSize="16sp"
+        tools:visibility="gone"
+        android:textStyle="bold|italic"
+        app:drawableEndCompat="@android:drawable/ic_popup_sync" />
+
+    <LinearLayout
+        android:id="@+id/content"
+        android:visibility="gone"
+        tools:visibility="visible"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="4dp">
+
+        <TextView
+            android:layout_marginTop="2dp"
+            android:id="@+id/currencyName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            tools:text="100$ → CNY" />
+
+        <TextView
+            android:layout_marginTop="2dp"
+            android:id="@+id/rate"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="723.81" />
+
+        <LinearLayout
+            android:layout_marginTop="2dp"
+            android:id="@+id/lastRefreshTime"
+            android:gravity="center_vertical"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="14sp"
+                tools:text="15:25:06"/>
+
+            <ImageView
+                android:layout_marginStart="4dp"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@android:drawable/ic_popup_sync"/>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

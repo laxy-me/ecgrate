@@ -1,0 +1,13 @@
+<resources>
+
+    <style name="Widget.Ecgrate.AppWidget.Container" parent="android:Widget">
+        <item name="android:id">@android:id/background</item>
+        <item name="android:background">@android:color/transparent</item>
+        <item name="background">@null</item>
+    </style>
+
+    <style name="Widget.Ecgrate.AppWidget.InnerView" parent="android:Widget">
+        <item name="android:background">@android:color/transparent</item>
+        <item name="android:textColor">@android:color/white</item>
+    </style>
+</resources>
