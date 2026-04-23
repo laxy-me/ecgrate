@@ -1,5 +1,6 @@
 <resources>
     <string name="app_name">ecgrate</string>
+    <string name="app_title">外汇牌价</string>
     <string name="click_to_load_data">点击进行配置</string>
     <string name="add_widget">Add widget</string>
     <string name="app_widget_description">Currency exchange rate widget</string>

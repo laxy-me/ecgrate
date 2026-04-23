@@ -1,19 +1,23 @@
 package com.laxy.ecgrate.receiver
 
+import android.app.AlarmManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
+import android.os.Build
 import com.laxy.ecgrate.global.RateTask
 
-/**
- *
- * @author laxy
- * @date 2024/4/1
- */
 class RefreshBroadcastReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent) {
-        Log.e("wtf", "hahah")
+        context ?: return
+        RateTask.initSp(context)
         RateTask.flush()
+        // API >= S 的精确闹钟是一次性的，需要手动续期
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            if (am.canScheduleExactAlarms()) {
+                RateTask.scheduleNextAlarm(context)
+            }
+        }
     }
 }

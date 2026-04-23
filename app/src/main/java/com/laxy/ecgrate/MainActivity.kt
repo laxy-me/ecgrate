@@ -1,23 +1,16 @@
 package com.laxy.ecgrate
 
 import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import android.content.IntentFilter
 import android.os.Build
-import android.os.SystemClock
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.activity.addCallback
-import androidx.core.content.IntentCompat
-import androidx.core.content.UnusedAppRestrictionsConstants.API_30
-import androidx.core.content.UnusedAppRestrictionsConstants.API_30_BACKPORT
-import androidx.core.content.UnusedAppRestrictionsConstants.API_31
-import androidx.core.content.UnusedAppRestrictionsConstants.DISABLED
-import androidx.core.content.UnusedAppRestrictionsConstants.ERROR
-import androidx.core.content.UnusedAppRestrictionsConstants.FEATURE_NOT_AVAILABLE
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.GridLayoutManager
@@ -36,64 +29,75 @@ import com.laxy.ecgrate.widget.RateWidget
 
 class MainActivity : BaseActivity<ActivityMainBinding>(ActivityMainBinding::inflate) {
     private val screenReceiver by lazy { ScreenReceiver() }
+    private val refreshReceiver by lazy { RefreshBroadcastReceiver() }
     private val mainViewModel by lazy { ViewModelProvider(this)[MainViewModel::class.java] }
     private var tempCurrency: String? = null
+    private val rateAdapter by lazy { RateAdapter(mutableListOf()) { tempCurrency = it } }
+
     override fun bindingView() {
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
-            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+        // Header 是深色渐变背景，强制状态栏图标为白色
+        WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = false
+
+        // 记录 Header 的 XML 原始 paddingTop，避免 insets 多次触发时叠加
+        val headerOriginalTop = binding.header.paddingTop
+        ViewCompat.setOnApplyWindowInsetsListener(binding.main) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            // 根 layout 只处理左右和底部
+            v.setPadding(bars.left, 0, bars.right, bars.bottom)
+            // 顶部 inset 加到 Header，让渐变背景延伸到状态栏后面
+            binding.header.setPadding(
+                binding.header.paddingLeft,
+                headerOriginalTop + bars.top,
+                binding.header.paddingRight,
+                binding.header.paddingBottom
+            )
             insets
         }
+
+        binding.recycleView.adapter = rateAdapter
+        binding.recycleView.layoutManager = GridLayoutManager(this, 2)
+
+        binding.time.setOnClickListener { mainViewModel.getRate() }
+
+        binding.edit.setOnClickListener {
+            binding.complete.visibility = View.VISIBLE
+            binding.edit.visibility = View.INVISIBLE
+            binding.intervalLayout.visibility = View.VISIBLE
+            rateAdapter.editMode = true
+        }
+        binding.complete.setOnClickListener {
+            rateAdapter.editMode = false
+            tempCurrency?.let { RateTask.selectedCurrency = it }
+            mainViewModel.getRate()
+            binding.edit.visibility = View.VISIBLE
+            binding.complete.visibility = View.INVISIBLE
+            binding.intervalLayout.visibility = View.GONE
+        }
+        binding.save.setOnClickListener {
+            val value = binding.editText.text.toString().toIntOrNull() ?: return@setOnClickListener
+            RateTask.interval = value
+            binding.editText.setText("")
+        }
+        binding.power.setOnClickListener {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                        data = Uri.parse("package:$packageName")
+                    })
+                } else {
+                    startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                    })
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
         data.observe(this) { list ->
-            if (list.isEmpty()) {
-                return@observe
-            }
-            binding.apply {
-                time.text = "${list.first().ratDat} ${list.first().ratTim}"
-                time.setOnClickListener {
-                    mainViewModel.getRate()
-                }
-                val rateAdapter = RateAdapter(list) {
-                    tempCurrency = it
-                }
-                recycleView.adapter = rateAdapter
-                recycleView.layoutManager = GridLayoutManager(root.context, 2)
-                edit.setOnClickListener {
-                    complete.visibility = View.VISIBLE
-                    edit.visibility = View.INVISIBLE
-                    intervalLayout.visibility = View.VISIBLE
-                    rateAdapter.editMode = true
-                }
-                complete.setOnClickListener {
-                    rateAdapter.editMode = false
-                    tempCurrency?.let {
-                        RateTask.selectedCurrency = it
-                    }
-                    mainViewModel.getRate()
-                    edit.visibility = View.VISIBLE
-                    complete.visibility = View.INVISIBLE
-                    intervalLayout.visibility = View.GONE
-                }
-                save.setOnClickListener {
-                    try {
-                        RateTask.interval = editText.text.toString().toInt()
-                        editText.setText("")
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-                power.setOnClickListener {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            startActivity(Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM))
-                        } else {
-                            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_SETTINGS))
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
-            }
+            if (list.isEmpty()) return@observe
+            binding.time.text = "${list.first().ratDat} ${list.first().ratTim}"
+            rateAdapter.updateData(list)
         }
 
         if (Build.VERSION.SDK_INT == Build.VERSION_CODES.TIRAMISU) {
@@ -114,104 +118,52 @@ class MainActivity : BaseActivity<ActivityMainBinding>(ActivityMainBinding::infl
             addAction(Intent.ACTION_SCREEN_ON)
             addAction(Intent.ACTION_SCREEN_OFF)
         })
-        registerReceiver(RefreshBroadcastReceiver(), IntentFilter().apply {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                addAction(AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)
-            }
-        })
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            registerReceiver(
+                refreshReceiver,
+                IntentFilter(AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)
+            )
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(screenReceiver)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            unregisterReceiver(refreshReceiver)
+        }
     }
 
     override fun onStop() {
         super.onStop()
-        val intent = Intent(this, RateWidget::class.java)
-        intent.setAction(RateWidget.ACTION_REFRESH)
-        PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-        sendBroadcast(intent)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            scheduleAlarm()
-            RateTask.schedule()
-        } else {
-            RateTask.schedule()
-        }
-    }
-
-    private fun onResult(appRestrictionsStatus: Int) {
-        when (appRestrictionsStatus) {
-            // Couldn't fetch status. Check logs for details.
-            ERROR -> {}
-
-            // Restrictions don't apply to your app on this device.
-            FEATURE_NOT_AVAILABLE -> {}
-
-            // The user has disabled restrictions for your app.
-            DISABLED -> {}
-
-            // If the user doesn't start your app for a few months, the system will
-            // place restrictions on it. See the API_* constants for details.
-            API_30_BACKPORT, API_30, API_31 -> handleRestrictions(appRestrictionsStatus)
-        }
-    }
-
-    private fun handleRestrictions(appRestrictionsStatus: Int) {
-        // If your app works primarily in the background, you can ask the user
-        // to disable these restrictions. Check if you have already asked the
-        // user to disable these restrictions. If not, you can show a message to
-        // the user explaining why permission auto-reset or app hibernation should be
-        // disabled. Then, redirect the user to the page in system settings where they
-        // can disable the feature.
-        val intent = IntentCompat.createManageUnusedAppRestrictionsIntent(this, packageName)
-
-        // You must use startActivityForResult(), not startActivity(), even if
-        // you don't use the result code returned in onActivityResult().
-        startActivityForResult(intent, 0)
-    }
-
-    private fun scheduleAlarm() {
-        // 获取AlarmManager实例
-        val alarmManager = getSystemService(ALARM_SERVICE) as AlarmManager
-        // 创建一个Intent，用于启动BroadcastReceiver
-        val intent = Intent(this, RefreshBroadcastReceiver::class.java)
-            .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    setAction(AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED)
-                }
-            }
-        val pendingIntent = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-
-        val intervalMillis = (3 * 1000).toLong()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC, intervalMillis, pendingIntent)
-//                alarmManager.setRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis(), intervalMillis, pendingIntent)
-                alarmManager?.setInexactRepeating(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime() + intervalMillis,
-                    intervalMillis,
-                    pendingIntent
-                )
-            }
-        } else {
-            alarmManager.setExact(AlarmManager.RTC_WAKEUP, intervalMillis, pendingIntent)
-        }
+        sendBroadcast(Intent(this, RateWidget::class.java).apply {
+            action = RateWidget.ACTION_REFRESH
+        })
+        RateTask.scheduleNextAlarm(this)
+        RateTask.schedule()
     }
 }
 
 
 internal class RateAdapter(
-    private val list: List<CurrencyRate.Body>,
+    private val list: MutableList<CurrencyRate.Body>,
     var tempCurrency: String? = null,
     val onItemClick: (String) -> Unit
-) :
-    RecyclerView.Adapter<RateAdapter.VH>() {
-    var editMode: Boolean = false;
+) : RecyclerView.Adapter<RateAdapter.VH>() {
+    var editMode: Boolean = false
     private var selectedPosition: Int? = null
+
+    fun updateData(newList: List<CurrencyRate.Body>) {
+        list.clear()
+        list.addAll(newList)
+        notifyDataSetChanged()
+    }
+
     override fun onCreateViewHolder(p0: ViewGroup, p1: Int): VH {
         return VH(ItemRateBinding.inflate(LayoutInflater.from(p0.context), p0, false))
     }
 
-    override fun getItemCount(): Int {
-        return list.count()
-    }
+    override fun getItemCount(): Int = list.size
 
     override fun onBindViewHolder(p0: VH, p1: Int) {
         p0.bindData(list[p1], p1)
@@ -221,26 +173,21 @@ internal class RateAdapter(
         fun bindData(body: CurrencyRate.Body, p1: Int) {
             binding.apply {
                 currencyName.text = body.ccyNbrEng
-                rate.text = "现汇卖出价:${body.rthOfr}\n现钞卖出价:${body.rtcOfr}\n现汇买入价:${body.rthBid}\n现钞买入价:${body.rtcBid}"
+                rthBid.text = body.rthBid
+                rthOfr.text = body.rthOfr
+                rtcBid.text = body.rtcBid
+                rtcOfr.text = body.rtcOfr
                 root.setOnClickListener {
-                    if (!editMode) {
-                        return@setOnClickListener
-                    }
+                    if (!editMode) return@setOnClickListener
                     onItemClick.invoke(body.ccyNbr)
                     tempCurrency = body.ccyNbr
-                    selectedPosition?.let {
-                        notifyItemChanged(it)
-                    }
+                    selectedPosition?.let { notifyItemChanged(it) }
                     notifyItemChanged(p1)
                 }
                 val selected = body.ccyNbr == (tempCurrency ?: RateTask.selectedCurrency)
-                if (selected) {
-                    selectedPosition = p1
-                }
+                if (selected) selectedPosition = p1
                 root.isSelected = selected
             }
         }
     }
 }
-
-
