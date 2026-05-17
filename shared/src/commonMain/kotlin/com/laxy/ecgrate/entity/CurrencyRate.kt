@@ -1,10 +1,14 @@
 package com.laxy.ecgrate.entity
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class CurrencyRate(
     val returnCode: String = "",
     val errorMsg: String? = null,
-    val body: List<Body> = listOf()
+    val body: List<Body> = emptyList()
 ) {
+    @Serializable
     data class Body(
         val ccyNbr: String = "",
         val ccyNbrEng: String = "",

@@ -9,9 +9,6 @@ pluginManagement {
         }
         mavenCentral()
         gradlePluginPortal()
-        maven {
-            url = uri("https://plugins.gradle.org/m2/")
-        }
     }
 }
 dependencyResolutionManagement {
@@ -23,5 +20,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "ecgrate"
+include(":shared")
 include(":app")
- 
