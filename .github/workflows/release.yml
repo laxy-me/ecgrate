@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       versionName:
-        description: "versionName (e.g. 1.0.3). Defaults to tag without leading v, or 1.0.${{ github.run_number }} on manual runs."
+        description: "versionName (e.g. 1.0.3). Defaults to tag (without leading v), or 1.0.<run_number> on manual runs."
         required: false
       track:
         description: "Play track"
@@ -47,15 +47,18 @@ jobs:
 
       - name: Resolve version
         id: ver
+        env:
+          INPUT_VERSION_NAME: ${{ github.event.inputs.versionName }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             NAME="${GITHUB_REF_NAME#v}"
-          elif [ -n "${{ inputs.versionName }}" ]; then
-            NAME="${{ inputs.versionName }}"
+          elif [ -n "$INPUT_VERSION_NAME" ]; then
+            NAME="$INPUT_VERSION_NAME"
           else
-            NAME="1.0.${{ github.run_number }}"
+            NAME="1.0.$RUN_NUMBER"
           fi
-          CODE=$(( ${{ github.run_number }} + 1 ))
+          CODE=$(( RUN_NUMBER + 1 ))
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
 
@@ -82,5 +85,5 @@ jobs:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: com.laxy.ecgrate
           releaseFiles: app/build/outputs/bundle/release/app-release.aab
-          track: ${{ inputs.track || 'internal' }}
+          track: ${{ github.event.inputs.track || 'internal' }}
           status: completed
