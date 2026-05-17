@@ -1,19 +1,30 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.jetbrainsKotlinAndroid)
     alias(libs.plugins.composeCompiler)
 }
 
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
+fun secret(key: String): String? =
+    System.getenv(key)?.takeIf { it.isNotBlank() }
+        ?: localProps.getProperty(key)?.takeIf { it.isNotBlank() }
+
 android {
     namespace = "com.laxy.ecgrate"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.laxy.ecgrate"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        targetSdk = 35
+        versionCode = (project.findProperty("versionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -21,23 +32,27 @@ android {
         compose = true
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("../rate.jks")
-            keyPassword = "rate123"
-            keyAlias = "rate"
-            storePassword = "rate123"
+    val keystoreFile = secret("KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    val keystorePassword = secret("KEYSTORE_PASSWORD")
+    val signKeyAlias = secret("KEY_ALIAS")
+    val signKeyPassword = secret("KEY_PASSWORD")
+    val releaseSigning = if (keystoreFile != null && keystorePassword != null && signKeyAlias != null && signKeyPassword != null) {
+        signingConfigs.create("release") {
+            storeFile = keystoreFile
+            storePassword = keystorePassword
+            keyAlias = signKeyAlias
+            keyPassword = signKeyPassword
         }
-    }
+    } else null
 
     buildTypes {
         debug {
             isMinifyEnabled = false
-            signingConfig = signingConfigs["release"]
+            releaseSigning?.let { signingConfig = it }
         }
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs["release"]
+            releaseSigning?.let { signingConfig = it }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
